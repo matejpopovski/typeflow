@@ -1,0 +1,49 @@
+{
+  "model": {
+    "image_size": 128,
+    "patch": 4,
+    "refine": 8,
+    "content": 4,
+    "base": 64,
+    "mults": [
+      1,
+      2,
+      3
+    ],
+    "blocks": 1,
+    "attention_at": [
+      16,
+      8
+    ],
+    "heads": 4,
+    "cond_dim": 192,
+    "style_dim": 192,
+    "style_channels": [
+      16,
+      32,
+      64,
+      128,
+      128
+    ],
+    "chars": 65,
+    "groups": 8
+  },
+  "train": {
+    "fonts": 16,
+    "per_font": 2,
+    "lr": 0.0003,
+    "weight_decay": 0.0001,
+    "ema": 0.9995,
+    "grad_clip": 1.0,
+    "warmup_steps": 500,
+    "max_steps": 100000,
+    "budget_seconds": 4320.0,
+    "k_min": 1,
+    "k_max": 8,
+    "style_dropout": 0.1,
+    "seed": 0,
+    "log_every": 50,
+    "checkpoint_seconds": 300.0,
+    "mps_memory_fraction": 0.33
+  }
+}

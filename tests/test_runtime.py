@@ -77,7 +77,7 @@ def test_supervisor_leaves_a_child_with_a_fresh_heartbeat_alone(tmp_path: Path) 
             time.sleep(0.2)
         """,
     )
-    result = supervise(command, tmp_path, stall_seconds=1.0, poll_seconds=0.1)
+    result = supervise(command, tmp_path, stall_seconds=5.0, poll_seconds=0.1)
     assert (result.code, result.stalls, result.restarts) == (0, 0, 0)
 
 

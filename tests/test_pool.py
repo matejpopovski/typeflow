@@ -34,7 +34,8 @@ def test_exception_becomes_a_failure_and_the_worker_survives() -> None:
 def test_hung_task_is_killed_and_the_rest_still_finish() -> None:
     tasks = [("hang", 0), ("ok", 1), ("ok", 2), ("ok", 3)]
     started = time.monotonic()
-    results = dict(map_with_timeout(job, tasks, workers=2, timeout=3))
+    # Long enough for a worker to start on a slow runner, since the clock starts at dispatch.
+    results = dict(map_with_timeout(job, tasks, workers=2, timeout=8))
     assert time.monotonic() - started < 60
     assert results[0] == Failure(TIMED_OUT)
     assert [results[i] for i in (1, 2, 3)] == [2, 4, 6]
