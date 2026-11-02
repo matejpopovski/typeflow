@@ -1,0 +1,10 @@
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+.DS_Store
+
+# Downloaded fonts, rendered glyph arrays and training state are rebuilt by the CLI.
+data/
+runs/

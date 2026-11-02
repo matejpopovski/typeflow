@@ -1,0 +1,22 @@
+{
+  "upstream_directories": 2017,
+  "families": 1635,
+  "styles": 3794,
+  "clusters": 966,
+  "largest_cluster_styles": 476,
+  "twin_style_pairs": 18627,
+  "twin_family_pairs_with_different_stems": 748,
+  "chars": 65,
+  "styles_by_split": {
+    "val": 190,
+    "train": 3225,
+    "test": 379
+  },
+  "styles_by_category": {
+    "SANS_SERIF": 1913,
+    "DISPLAY": 714,
+    "SERIF": 803,
+    "HANDWRITING": 249,
+    "MONOSPACE": 115
+  }
+}
