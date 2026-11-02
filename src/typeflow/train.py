@@ -13,10 +13,11 @@ from typing import Any
 
 import numpy as np
 import torch
+import torch.nn.functional as F
 from torch import Tensor
 from torch.nn.utils import clip_grad_norm_
 
-from .data import Batch, sample_batch
+from .data import Batch, sample_batch, to_unit
 from .flow import flow_pair, sample_time
 from .model import ModelConfig, TypeFlow
 from .runtime import atomic_save, beat, synchronize, to_cpu
@@ -26,9 +27,9 @@ CHECKPOINT = "latest.pt"
 
 @dataclass(frozen=True)
 class TrainConfig:
-    fonts: int = 8
-    per_font: int = 6
-    lr: float = 2e-4
+    fonts: int = 16
+    per_font: int = 2
+    lr: float = 3e-4
     weight_decay: float = 1e-4
     ema: float = 0.9995
     grad_clip: float = 1.0
@@ -77,6 +78,30 @@ def flow_loss(
     drop = (torch.rand(b, generator=generator) < style_dropout).to(device)
     style = torch.where(drop[:, None], model.null_style[None], style)
     return (model(x_t, t, batch.chars, style) - target).square().mean()
+
+
+def seed_character_maps(model: TypeFlow, glyphs: np.ndarray, style_ids: np.ndarray) -> None:
+    """Start each character's map from that character's mean over a sample of training fonts.
+
+    The network would find the rough skeleton of each letter eventually. Handing it over at the
+    start spends those training steps on style instead.
+    """
+    sample = np.sort(style_ids)[:: max(1, len(style_ids) // 256)]
+    grid = model.content.shape[-1]
+    with torch.no_grad():
+        for char in range(model.cfg.chars):
+            mean = to_unit(glyphs[sample, char]).mean(dim=0, keepdim=True)
+            pooled = F.adaptive_avg_pool2d(mean[None], grid)
+            model.content[char, 0] = pooled[0, 0].to(model.content.device)
+
+
+def ema_decay(target: float, step: int) -> float:
+    """Ramp the decay up from zero.
+
+    A fixed high decay drags the random initial weights along for thousands of steps, and an
+    average over that early stretch of training is not a working network.
+    """
+    return min(target, (1 + step) / (10 + step))
 
 
 @torch.no_grad()
@@ -139,6 +164,8 @@ def train(
         torch.mps.set_per_process_memory_fraction(cfg.mps_memory_fraction)
 
     model, ema, optimizer = build(model_cfg, cfg, device)
+    seed_character_maps(model, glyphs, style_ids)
+    ema.load_state_dict(model.state_dict())
     rng = np.random.default_rng(cfg.seed)
     generator = torch.Generator().manual_seed(cfg.seed)
     step, elapsed = 0, 0.0
@@ -158,6 +185,9 @@ def train(
         )
 
     log = (run_dir / "log.jsonl").open("a")
+    if step:
+        log.write(json.dumps({"event": "resumed", "step": step, "elapsed": elapsed}) + "\n")
+        log.flush()
     started = time.monotonic() - elapsed
     last_save = time.monotonic()
     window: list[Tensor] = []
@@ -181,7 +211,7 @@ def train(
         loss.backward()
         clip_grad_norm_(model.parameters(), cfg.grad_clip)
         optimizer.step()
-        update_ema(ema, model, cfg.ema)
+        update_ema(ema, model, ema_decay(cfg.ema, step))
         step += 1
         window.append(loss.detach())
         if step % cfg.log_every == 0:

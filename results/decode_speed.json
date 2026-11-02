@@ -1,0 +1,15 @@
+{
+  "machine": "arm64",
+  "torch_threads": 10,
+  "batch": 96,
+  "cpu": {
+    "seconds_per_batch": 27.636,
+    "glyphs_per_second": 3.5,
+    "velocity_calls_per_glyph": 16
+  },
+  "mps": {
+    "seconds_per_batch": 1.755,
+    "glyphs_per_second": 54.7,
+    "velocity_calls_per_glyph": 16
+  }
+}

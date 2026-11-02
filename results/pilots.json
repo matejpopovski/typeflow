@@ -1,0 +1,42 @@
+[
+  {
+    "run": "global conditioning only, fixed EMA decay",
+    "steps": 2954,
+    "l1": 0.2741427719593048,
+    "ssim": 0.006640086881816387,
+    "ink_iou": 0.13034039735794067,
+    "grey_share": 0.9804561734199524,
+    "perceptual": 1.6627237796783447,
+    "legibility": 0.0
+  },
+  {
+    "run": "global conditioning only, live weights",
+    "steps": 2954,
+    "l1": 0.061847805976867676,
+    "ssim": 0.6435424089431763,
+    "ink_iou": 0.3411913216114044,
+    "grey_share": 0.5260322093963623,
+    "perceptual": 0.59665846824646,
+    "legibility": 0.25833332538604736
+  },
+  {
+    "run": "character maps from random, EMA ramp",
+    "steps": 2937,
+    "l1": 0.05675850063562393,
+    "ssim": 0.6379856467247009,
+    "ink_iou": 0.3881339728832245,
+    "grey_share": 0.5350812077522278,
+    "perceptual": 0.5670298337936401,
+    "legibility": 0.41428571939468384
+  },
+  {
+    "run": "character maps seeded from mean glyphs, EMA ramp",
+    "steps": 2950,
+    "l1": 0.04779764264822006,
+    "ssim": 0.6610393524169922,
+    "ink_iou": 0.4600699245929718,
+    "grey_share": 0.5281990170478821,
+    "perceptual": 0.4964600205421448,
+    "legibility": 0.8071428537368774
+  }
+]

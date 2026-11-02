@@ -1,0 +1,9 @@
+{
+  "pairs": 40,
+  "frames": 9,
+  "max_over_mean_frame_step": 1.319188579916954,
+  "flow_legibility": 0.90625,
+  "flow_grey_share": 0.32385472133755683,
+  "crossfade_legibility": 0.96875,
+  "crossfade_grey_share": 0.7142711080610752
+}

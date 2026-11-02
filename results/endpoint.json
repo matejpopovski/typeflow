@@ -1,0 +1,75 @@
+{
+  "noise_recovery": [
+    {
+      "t": 0.5,
+      "velocity_rmse": 0.15392929315567017,
+      "correlation_with_true_noise_on_paper": 0.9983567595481873
+    },
+    {
+      "t": 0.9,
+      "velocity_rmse": 0.23251834511756897,
+      "correlation_with_true_noise_on_paper": 0.99278724193573
+    },
+    {
+      "t": 0.99,
+      "velocity_rmse": 0.608367383480072,
+      "correlation_with_true_noise_on_paper": 0.8691035509109497
+    },
+    {
+      "t": 0.999,
+      "velocity_rmse": 0.9921061992645264,
+      "correlation_with_true_noise_on_paper": 0.18653921782970428
+    },
+    {
+      "t": 1.0,
+      "velocity_rmse": 1.0229060649871826,
+      "correlation_with_true_noise_on_paper": -2.6959969545714557e-05
+    }
+  ],
+  "solvers": [
+    {
+      "method": "heun",
+      "steps": 16,
+      "skip_endpoint": false,
+      "l1": 0.04386807233095169,
+      "ssim": 0.5686389207839966,
+      "ink_iou": 0.4905611574649811,
+      "grey_share": 0.31135955452919006,
+      "perceptual": 0.4397816061973572,
+      "legibility": 0.862500011920929
+    },
+    {
+      "method": "heun",
+      "steps": 16,
+      "skip_endpoint": true,
+      "l1": 0.03904643654823303,
+      "ssim": 0.8420162796974182,
+      "ink_iou": 0.4905959963798523,
+      "grey_share": 0.3024860918521881,
+      "perceptual": 0.4052184224128723,
+      "legibility": 0.8611111044883728
+    },
+    {
+      "method": "rk4",
+      "steps": 8,
+      "skip_endpoint": false,
+      "l1": 0.04271616414189339,
+      "ssim": 0.6817623376846313,
+      "ink_iou": 0.48641839623451233,
+      "grey_share": 0.3065076172351837,
+      "perceptual": 0.42506900429725647,
+      "legibility": 0.8527777791023254
+    },
+    {
+      "method": "rk4",
+      "steps": 8,
+      "skip_endpoint": true,
+      "l1": 0.039921488612890244,
+      "ssim": 0.8321419358253479,
+      "ink_iou": 0.4864690899848938,
+      "grey_share": 0.29548850655555725,
+      "perceptual": 0.4087754189968109,
+      "legibility": 0.8513888716697693
+    }
+  ]
+}

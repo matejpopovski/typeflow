@@ -1,7 +1,15 @@
 import pytest
 import torch
 
-from typeflow.flow import TABLEAUS, flow_pair, guided, integrate, sample_time
+from typeflow.flow import (
+    TABLEAUS,
+    flow_pair,
+    guided,
+    integrate,
+    sample_time,
+    touches_endpoint,
+    velocity_calls,
+)
 
 
 def test_path_starts_at_noise_and_ends_at_data() -> None:
@@ -75,6 +83,47 @@ def test_the_optimal_field_for_one_data_point_reaches_it() -> None:
 
     out = integrate(velocity, torch.randn(1, 2), 32, "euler")
     assert torch.allclose(out, target[None], atol=1e-5)
+
+
+def noise_blind_field(noise: torch.Tensor, target: torch.Tensor):
+    """A field that follows the true path but cannot see the noise at t=1, like a trained flow."""
+
+    def velocity(x: torch.Tensor, t: torch.Tensor) -> torch.Tensor:
+        return target if t[0].item() >= 1.0 else target - noise
+
+    return velocity
+
+
+@pytest.mark.parametrize("name", ["heun", "rk4"])
+def test_a_field_that_is_blind_at_the_endpoint_leaves_grain_unless_it_is_skipped(name: str) -> None:
+    noise, target = torch.randn(1, 64), torch.full((1, 64), -1.0)
+    field = noise_blind_field(noise, target)
+    steps = 8
+    grainy = integrate(field, noise, steps, name)
+    clean = integrate(field, noise, steps, name, skip_endpoint=True)
+    assert (grainy - target).abs().max() > 0.01
+    assert torch.allclose(clean, target, atol=1e-5)
+
+
+@pytest.mark.parametrize("name", TABLEAUS)
+def test_skipping_the_endpoint_never_evaluates_t_equal_one(name: str) -> None:
+    seen: list[float] = []
+
+    def velocity(x: torch.Tensor, t: torch.Tensor) -> torch.Tensor:
+        seen.append(t[0].item())
+        return x
+
+    integrate(velocity, torch.ones(1), 4, name, skip_endpoint=True)
+    assert max(seen) < 1.0
+    assert len(seen) == velocity_calls(name, 4)
+
+
+def test_only_methods_with_a_final_stage_at_one_are_changed() -> None:
+    assert {n for n, t in TABLEAUS.items() if touches_endpoint(t)} == {"heun", "rk4"}
+    assert velocity_calls("heun", 8) == 15
+    assert velocity_calls("heun", 8, skip_endpoint=False) == 16
+    assert velocity_calls("midpoint", 8) == 16
+    assert velocity_calls("euler", 8) == 8
 
 
 def test_guidance_of_one_is_the_conditional_field() -> None:

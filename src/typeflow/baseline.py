@@ -12,28 +12,27 @@ import numpy as np
 import torch
 
 
-def glyph_distances(corpus: np.ndarray, queries: np.ndarray, chunk: int = 256) -> torch.Tensor:
-    """L1 distance per character between query and corpus styles.
+def glyph_distances(
+    glyphs: np.ndarray, corpus_ids: np.ndarray, query_ids: np.ndarray, chunk: int = 256
+) -> torch.Tensor:
+    """L1 distance per character between query and corpus styles of ``glyphs``.
 
-    ``corpus`` has shape ``(C, chars, H, W)`` and ``queries`` has shape ``(Q, chars, H, W)``. The
-    result has shape ``(chars, Q, C)``, so a lookup for any subset of letters is a sum of slices.
-    Memory stays bounded because only one character's images are in play at a time.
+    The result has shape ``(chars, Q, C)``, so a lookup for any subset of letters is a sum of
+    slices. Only one character's images are read at a time, which keeps this far below the size of
+    the corpus even when ``glyphs`` is a memory map.
     """
-    n_chars = corpus.shape[1]
-    out = torch.empty(n_chars, len(queries), len(corpus))
+    n_chars = glyphs.shape[1]
+    size = glyphs.shape[2] * glyphs.shape[3]
+    out = torch.empty(n_chars, len(query_ids), len(corpus_ids))
     for char in range(n_chars):
-        references = torch.from_numpy(
-            np.asarray(corpus[:, char], dtype=np.float32).reshape(len(corpus), -1) / 255.0
-        )
-        for start in range(0, len(queries), chunk):
-            block = torch.from_numpy(
-                np.asarray(queries[start : start + chunk, char], dtype=np.float32).reshape(
-                    -1, references.shape[1]
-                )
-                / 255.0
-            )
+        corpus = np.asarray(glyphs[corpus_ids, char], dtype=np.float32) / 255.0
+        references = torch.from_numpy(corpus.reshape(len(corpus_ids), size))
+        for start in range(0, len(query_ids), chunk):
+            ids = query_ids[start : start + chunk]
+            queries = np.asarray(glyphs[ids, char], dtype=np.float32) / 255.0
+            block = torch.from_numpy(queries.reshape(len(ids), size))
             out[char, start : start + chunk] = torch.cdist(block, references, p=1)
-    return out / (corpus.shape[2] * corpus.shape[3])
+    return out / size
 
 
 def nearest_fonts(distances: torch.Tensor, chars: list[int]) -> torch.Tensor:

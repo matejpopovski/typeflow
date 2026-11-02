@@ -74,7 +74,7 @@ def test_one_seed_gives_one_output_and_ignores_batching() -> None:
     chars = torch.arange(6)
     noise = noise_for((6, 1, 32, 32), 3)
     with torch.no_grad():
-        m.unet.head.weight.normal_(std=0.05)
+        m.unet.refine_out.weight.normal_(std=0.05)
     a = sample_glyphs(m, style, chars, noise, SamplerConfig(steps=2, method="euler", batch=6))
     b = sample_glyphs(m, style, chars, noise, SamplerConfig(steps=2, method="euler", batch=2))
     assert np.abs(a.astype(int) - b.astype(int)).max() <= 1
@@ -99,16 +99,15 @@ def test_sampler_sweep_stays_on_validation_fonts(monkeypatch) -> None:
     rows = sweep_sampler(model(), net(), s, CPU, fonts=2, chars_per_font=2)
     val = set(s.split_indices("val").tolist())
     assert all(set(ids.tolist()) <= val for ids in seen)
-    assert {r["method"] for r in rows} == {"euler", "heun", "rk4"}
+    assert {r["method"] for r in rows} == {"euler", "midpoint", "heun", "rk4"}
 
 
 def test_full_evaluation_runs_and_reports_paired_differences(tmp_path: Path) -> None:
     s = store()
     report = evaluate_test(model(), net(), s, FAST, CPU, tmp_path, counts=(1, 4), every_nth_char=30)
     assert report["test_fonts"] == 4 and report["train_fonts_searched"] == 6
-    assert {"oracle_font", "nearest_k4", "model_k4", "model_minus_nearest_k4"} <= set(
-        report["summary"]
-    )
+    expected = {"mean_glyph", "oracle_font", "nearest_k4", "model_k4", "model_minus_nearest_k4"}
+    assert expected <= set(report["summary"])
     assert np.load(tmp_path / "model_k4.npy").shape == (4, report["target_chars"], 32, 32)
     assert set(report["by_category"]) == {"SERIF", "DISPLAY"}
 

@@ -62,21 +62,43 @@ TABLEAUS = {
 }
 
 
-def integrate(velocity: Velocity, x0: Tensor, steps: int, method: str = "heun") -> Tensor:
-    """Integrate from t=0 to t=1 on a uniform grid, using ``steps * stages`` velocity calls."""
+def touches_endpoint(tableau: Tableau) -> bool:
+    return tableau.c[-1] == 1.0
+
+
+def velocity_calls(method: str, steps: int, skip_endpoint: bool = True) -> int:
+    tableau = TABLEAUS[method]
+    if skip_endpoint and touches_endpoint(tableau):
+        return (steps - 1) * tableau.stages + 1
+    return steps * tableau.stages
+
+
+def integrate(
+    velocity: Velocity, x0: Tensor, steps: int, method: str = "heun", skip_endpoint: bool = False
+) -> Tensor:
+    """Integrate from t=0 to t=1 on a uniform grid.
+
+    With ``skip_endpoint`` the last step falls back to Euler for methods that would otherwise
+    evaluate the field at t=1. A flow's input carries no noise there, so a trained network cannot
+    know which trajectory it is on, and its velocity is wrong by the size of the noise. Used in a
+    final corrector stage, that error stays in the output as grain of amplitude h/2.
+    """
     tableau = TABLEAUS[method]
     h = 1.0 / steps
     x = x0
     for step in range(steps):
+        active = tableau
+        if skip_endpoint and step == steps - 1 and touches_endpoint(tableau):
+            active = TABLEAUS["euler"]
         t0 = step * h
         slopes: list[Tensor] = []
-        for coefficients, c in zip(tableau.a, tableau.c):
+        for coefficients, c in zip(active.a, active.c):
             stage = x
             for weight, slope in zip(coefficients, slopes):
                 if weight:
                     stage = stage + h * weight * slope
             slopes.append(velocity(stage, x.new_full((x.shape[0],), t0 + c * h)))
-        for weight, slope in zip(tableau.b, slopes):
+        for weight, slope in zip(active.b, slopes):
             if weight:
                 x = x + h * weight * slope
     return x

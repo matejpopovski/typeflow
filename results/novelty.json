@@ -1,0 +1,84 @@
+{
+  "k": 4,
+  "groups": [
+    {
+      "group": 1,
+      "fonts": 95,
+      "novelty_range": [
+        0.004976094234734774,
+        0.009636243805289268
+      ],
+      "model_l1": 0.027671711538967334,
+      "nearest_l1": 0.019660709063081365,
+      "model_ssim": 0.8641139946485821,
+      "nearest_ssim": 0.9154293731639259,
+      "model_ink_iou": 0.6401346040399452,
+      "nearest_ink_iou": 0.7279950242293508,
+      "model_perceptual": 0.26654740022985557,
+      "nearest_perceptual": 0.17578910910769513,
+      "model_legibility": 0.9756232744769047,
+      "nearest_legibility": 0.992613114808735
+    },
+    {
+      "group": 2,
+      "fonts": 95,
+      "novelty_range": [
+        0.009636243805289268,
+        0.013987217098474503
+      ],
+      "model_l1": 0.03560812020380246,
+      "nearest_l1": 0.023370447509775037,
+      "model_ssim": 0.8351946880942897,
+      "nearest_ssim": 0.9002288630134181,
+      "model_ink_iou": 0.5536146296384303,
+      "nearest_ink_iou": 0.6778866425940865,
+      "model_perceptual": 0.3686985017437684,
+      "nearest_perceptual": 0.22917726808472683,
+      "model_legibility": 0.9394275204131478,
+      "nearest_legibility": 0.9911357377704821
+    },
+    {
+      "group": 3,
+      "fonts": 95,
+      "novelty_range": [
+        0.013987217098474503,
+        0.020549102686345577
+      ],
+      "model_l1": 0.043773994986948214,
+      "nearest_l1": 0.027518110800730553,
+      "model_ssim": 0.8060800928818552,
+      "nearest_ssim": 0.8861370870941564,
+      "model_ink_iou": 0.4251599600636645,
+      "nearest_ink_iou": 0.6033053692626326,
+      "model_perceptual": 0.46351782961895593,
+      "nearest_perceptual": 0.27063103059404775,
+      "model_legibility": 0.8212373077869415,
+      "nearest_legibility": 0.9771006515151576
+    },
+    {
+      "group": 4,
+      "fonts": 95,
+      "novelty_range": [
+        0.020549102686345577,
+        0.1513419896364212
+      ],
+      "model_l1": 0.058907335016288254,
+      "nearest_l1": 0.045775079080148745,
+      "model_ssim": 0.7644052085123564,
+      "nearest_ssim": 0.8311497882792824,
+      "model_ink_iou": 0.3612474179189456,
+      "nearest_ink_iou": 0.4643417685439712,
+      "model_perceptual": 0.5827390068455747,
+      "nearest_perceptual": 0.465936479442998,
+      "model_legibility": 0.7689750759225142,
+      "nearest_legibility": 0.9390581789769624
+    }
+  ],
+  "share_of_fonts_where_model_beats_nearest": {
+    "l1": 0.055408970976253295,
+    "ssim": 0.0,
+    "ink_iou": 0.11609498680738786,
+    "perceptual": 0.08970976253298153,
+    "legibility": 0.158311345646438
+  }
+}

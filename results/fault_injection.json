@@ -1,0 +1,13 @@
+{
+  "last_logged_step_before_freeze": 150,
+  "resumed_from_step": 114,
+  "seconds_from_freeze_to_resume": 26.2,
+  "stall_threshold_seconds": 20,
+  "checkpoint_interval_seconds": 20,
+  "final_step": 700,
+  "supervisor": {
+    "code": 0,
+    "restarts": 1,
+    "stalls": 1
+  }
+}

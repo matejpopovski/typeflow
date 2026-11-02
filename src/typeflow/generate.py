@@ -16,15 +16,17 @@ from .model import ModelConfig, TypeFlow
 
 @dataclass(frozen=True)
 class SamplerConfig:
-    steps: int = 16
-    method: str = "heun"
-    guidance: float = 1.0
-    batch: int = 32
+    """Defaults are the validation winner: lowest perceptual distance within 32 velocity calls."""
+
+    steps: int = 8
+    method: str = "euler"
+    guidance: float = 1.25
+    batch: int = 96
 
 
 def load_model(path: Path, device: torch.device) -> TypeFlow:
     """Load either exported weights or a training checkpoint's EMA."""
-    saved = torch.load(path, map_location="cpu", weights_only=False)
+    saved = torch.load(path, map_location="cpu", weights_only=True)
     model = TypeFlow(ModelConfig.from_dict(saved["model_config"]))
     state = saved.get("ema", saved.get("weights"))
     model.load_state_dict({k: v.float() for k, v in state.items()})
@@ -84,7 +86,9 @@ def sample_glyphs(
             return model(x, t, c, null)
 
         velocity = guided(conditional, unconditional, cfg.guidance)
-        x = integrate(velocity, noise[start:stop].to(device), cfg.steps, cfg.method)
+        x = integrate(
+            velocity, noise[start:stop].to(device), cfg.steps, cfg.method, skip_endpoint=True
+        )
         out.append(x.cpu())
     glyphs = torch.cat(out)[:, 0]
     return ((glyphs.clamp(-1, 1) + 1) * 127.5).round().to(torch.uint8).numpy()

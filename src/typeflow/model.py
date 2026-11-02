@@ -3,6 +3,10 @@
 Style reaches the U-Net through one global vector and nothing else. Spatial cross-attention to the
 reference glyphs tends to transfer detail better, but a single vector gives interpolation a plain
 meaning: a straight line between two typefaces. That property is the point of the project.
+
+Character identity needs more than that. FiLM acts on all positions alike and convolutions are
+translation-equivariant, so at t=0, when the input is pure noise, a global vector cannot say where
+the strokes of an "A" go. Each character therefore also owns a small learned spatial map.
 """
 
 from __future__ import annotations
@@ -20,19 +24,22 @@ from .render import CHARSET
 @dataclass(frozen=True)
 class ModelConfig:
     image_size: int = 128
-    # The heavy levels run at image_size / patch on patch^2 channels, which keeps full output
-    # resolution at the cost of a network working on a quarter of the pixels.
-    patch: int = 2
-    # Parameters sit in the deep levels and compute in the shallow ones, so capping the deep
-    # widths keeps the weights small enough to commit without giving up high-resolution capacity.
-    base: int = 40
-    mults: tuple[int, ...] = (1, 2, 3, 3)
-    blocks: int = 2
+    # The U-Net runs on a coarse grid of image_size / patch, which sets the cost of a step. A few
+    # thin layers at full resolution then see the raw input again, so that edges can land anywhere
+    # and the patch grid does not show.
+    patch: int = 4
+    refine: int = 8
+    content: int = 4
+    base: int = 64
+    # The deepest level holds most of the parameters and little of the compute, so capping its
+    # width is what keeps half-precision weights small enough to commit.
+    mults: tuple[int, ...] = (1, 2, 3)
+    blocks: int = 1
     attention_at: tuple[int, ...] = (16, 8)
     heads: int = 4
     cond_dim: int = 192
     style_dim: int = 192
-    style_channels: tuple[int, ...] = (16, 32, 64, 128, 160)
+    style_channels: tuple[int, ...] = (16, 32, 64, 128, 128)
     chars: int = len(CHARSET)
     groups: int = 8
 
@@ -50,6 +57,8 @@ def tiny_config(image_size: int = 32) -> ModelConfig:
     return ModelConfig(
         image_size=image_size,
         patch=2,
+        refine=2,
+        content=2,
         base=8,
         mults=(1, 2),
         blocks=1,
@@ -131,7 +140,7 @@ class GlyphUNet(nn.Module):
         super().__init__()
         self.cfg = cfg
         channels = [cfg.base * m for m in cfg.mults]
-        self.stem = nn.Conv2d(cfg.patch**2, channels[0], 3, padding=1)
+        self.stem = nn.Conv2d(cfg.patch**2 + cfg.content, channels[0], 3, padding=1)
 
         resolution = cfg.image_size // cfg.patch
         block = lambda a, b: ResBlock(a, b, cfg.cond_dim, cfg.groups)  # noqa: E731
@@ -170,12 +179,14 @@ class GlyphUNet(nn.Module):
                 resolution *= 2
 
         self.norm_out = nn.GroupNorm(cfg.groups, current)
-        self.head = nn.Conv2d(current, cfg.patch**2, 3, padding=1)
-        nn.init.zeros_(self.head.weight)
-        nn.init.zeros_(self.head.bias)
+        self.head = nn.Conv2d(current, cfg.refine * cfg.patch**2, 3, padding=1)
+        self.refine_in = nn.Conv2d(cfg.refine + 1, cfg.refine, 3, padding=1)
+        self.refine_out = nn.Conv2d(cfg.refine, 1, 3, padding=1)
+        nn.init.zeros_(self.refine_out.weight)
+        nn.init.zeros_(self.refine_out.bias)
 
-    def forward(self, x: Tensor, cond: Tensor) -> Tensor:
-        h = self.stem(F.pixel_unshuffle(x, self.cfg.patch))
+    def forward(self, x: Tensor, cond: Tensor, content: Tensor) -> Tensor:
+        h = self.stem(torch.cat([F.pixel_unshuffle(x, self.cfg.patch), content], dim=1))
         skips = [h]
         for module in self.down:
             h = module(h) if isinstance(module, nn.Conv2d) else _apply(module, h, cond)
@@ -188,7 +199,8 @@ class GlyphUNet(nn.Module):
                 h = module(F.interpolate(h, scale_factor=2.0, mode="nearest"))
             else:
                 h = _apply(module, torch.cat([h, skips.pop()], dim=1), cond)
-        return F.pixel_shuffle(self.head(F.silu(self.norm_out(h))), self.cfg.patch)
+        fine = F.pixel_shuffle(self.head(F.silu(self.norm_out(h))), self.cfg.patch)
+        return self.refine_out(F.silu(self.refine_in(torch.cat([fine, x], dim=1))))
 
 
 def _apply(layers: nn.ModuleList, h: Tensor, cond: Tensor) -> Tensor:
@@ -243,6 +255,8 @@ class TypeFlow(nn.Module):
         self.style_encoder = StyleEncoder(cfg)
         self.unet = GlyphUNet(cfg)
         self.char = nn.Embedding(cfg.chars, cfg.cond_dim)
+        grid = cfg.image_size // cfg.patch
+        self.content = nn.Parameter(0.1 * torch.randn(cfg.chars, cfg.content, grid, grid))
         self.null_style = nn.Parameter(torch.zeros(cfg.style_dim))
         self.style_in = nn.Linear(cfg.style_dim, cfg.cond_dim)
         self.time = nn.Sequential(
@@ -256,4 +270,4 @@ class TypeFlow(nn.Module):
     def forward(self, x: Tensor, t: Tensor, chars: Tensor, style: Tensor) -> Tensor:
         time = self.time(timestep_embedding(t, self.cfg.cond_dim))
         cond = self.cond_out(time + self.char(chars) + self.style_in(style))
-        return self.unet(x, cond)
+        return self.unet(x, cond, self.content[chars])

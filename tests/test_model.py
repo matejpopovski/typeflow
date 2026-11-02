@@ -44,7 +44,7 @@ def test_all_parameters_receive_gradient() -> None:
     torch.manual_seed(0)
     model = TypeFlow(CFG)
     with torch.no_grad():
-        model.unet.head.weight.normal_()
+        model.unet.refine_out.weight.normal_()
         for module in model.modules():
             if isinstance(module, FiLM):
                 module.project.weight.normal_(std=0.01)
@@ -89,7 +89,42 @@ def test_style_encoder_knows_which_letter_it_sees() -> None:
 def test_pixel_unshuffle_keeps_full_resolution_output() -> None:
     cfg = tiny_config(image_size=48)
     x = torch.randn(1, 1, 48, 48)
-    assert GlyphUNet(cfg)(x, torch.zeros(1, cfg.cond_dim)).shape == x.shape
+    grid = 48 // cfg.patch
+    content = torch.zeros(1, cfg.content, grid, grid)
+    assert GlyphUNet(cfg)(x, torch.zeros(1, cfg.cond_dim), content).shape == x.shape
+
+
+def centre_of_flat_output(model: TypeFlow, cfg: ModelConfig, char: int) -> torch.Tensor:
+    size = cfg.image_size
+    x = torch.zeros(1, 1, size, size)
+    out = model(x, torch.zeros(1), torch.tensor([char]), torch.zeros(1, cfg.style_dim))
+    return out[0, 0, size // 2 - 8 : size // 2 + 8, size // 2 - 8 : size // 2 + 8]
+
+
+def varies_with_position(centre: torch.Tensor, patch: int) -> float:
+    """Difference from the same image moved by one patch, the period of the shuffle pattern."""
+    return (centre[:, patch:] - centre[:, :-patch]).abs().max().item()
+
+
+def test_character_maps_supply_position_where_convolution_and_film_cannot() -> None:
+    """Global conditioning on a flat input gives the same output everywhere, so a letter cannot be
+    placed. The image is large enough that zero padding at the border cannot reach the centre.
+    """
+    torch.manual_seed(0)
+    cfg = tiny_config(image_size=128)
+    model = TypeFlow(cfg)
+    with torch.no_grad():
+        model.unet.refine_out.weight.normal_()
+        for module in model.modules():
+            if isinstance(module, FiLM):
+                module.project.bias.normal_(std=0.1)
+    centre = centre_of_flat_output(model, cfg, 0)
+    assert varies_with_position(centre, cfg.patch) > 1e-3
+    assert not torch.allclose(centre, centre_of_flat_output(model, cfg, 1))
+
+    with torch.no_grad():
+        model.content.zero_()
+    assert varies_with_position(centre_of_flat_output(model, cfg, 0), cfg.patch) < 1e-4
 
 
 def test_config_round_trip() -> None:

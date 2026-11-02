@@ -1,0 +1,58 @@
+{
+  "test_fonts": 379,
+  "distance_scale": "0 identical, 1 disjoint, over all characters",
+  "quantiles": {
+    "0.0": 0.06620566546916962,
+    "0.01": 0.07151093512773514,
+    "0.05": 0.09313233867287636,
+    "0.25": 0.13758078962564468,
+    "0.5": 0.18381516635417938,
+    "0.75": 0.26508629322052,
+    "1.0": 0.8407530188560486
+  },
+  "fonts_below_0.05": 0,
+  "fonts_below_0.10": 26,
+  "fonts_below_0.15": 119,
+  "closest_pairs": [
+    {
+      "test": "Zalando Sans Black",
+      "train": "Mona Sans Black",
+      "distance": 0.0662
+    },
+    {
+      "test": "Scoutie Sans Bold",
+      "train": "Inter Tight Bold",
+      "distance": 0.0667
+    },
+    {
+      "test": "Gantari Black",
+      "train": "Figtree Black",
+      "distance": 0.0675
+    },
+    {
+      "test": "Momo Trust Sans Bold",
+      "train": "Akt Bold",
+      "distance": 0.0697
+    },
+    {
+      "test": "Carlito Bold",
+      "train": "Lato Black",
+      "distance": 0.072
+    },
+    {
+      "test": "Zalando Sans Bold",
+      "train": "Pliant Bold",
+      "distance": 0.0735
+    },
+    {
+      "test": "Bai Jamjuree Bold",
+      "train": "Chakra Petch Bold",
+      "distance": 0.0744
+    },
+    {
+      "test": "Valley Sans Black",
+      "train": "Pliant Black",
+      "distance": 0.0774
+    }
+  ]
+}

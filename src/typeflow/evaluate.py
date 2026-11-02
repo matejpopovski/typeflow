@@ -19,6 +19,7 @@ from torch import Tensor
 from . import metrics
 from .baseline import glyph_distances, nearest_fonts
 from .data import to_unit
+from .flow import velocity_calls
 from .generate import SamplerConfig, encode_styles, noise_for, sample_glyphs
 from .model import TypeFlow
 from .perceptual import GlyphNet, feature_distance
@@ -156,9 +157,11 @@ def sweep_sampler(
     split = make_split(store, np.sort(picks), targets)
     rows = []
     grid = [("euler", s, 1.0) for s in (1, 2, 4, 8, 16, 32, 64)]
-    grid += [("heun", s, 1.0) for s in (1, 2, 4, 8, 16, 32)]
-    grid += [("rk4", s, 1.0) for s in (1, 2, 4, 8)]
-    grid += [("heun", 16, g) for g in (1.25, 1.5, 2.0, 3.0)]
+    grid += [("midpoint", s, 1.0) for s in (1, 2, 4, 8, 16, 32)]
+    grid += [("heun", s, 1.0) for s in (2, 4, 8, 16, 32)]
+    grid += [("rk4", s, 1.0) for s in (2, 4, 8)]
+    grid += [("euler", 8, g) for g in (1.25, 1.5, 2.0, 3.0)]
+    grid += [("midpoint", 8, g) for g in (1.25, 1.5, 2.0, 3.0)]
     for method, steps, guidance in grid:
         cfg = SamplerConfig(steps=steps, method=method, guidance=guidance)
         output = run_model(model, store, split, k, cfg, seed)
@@ -169,7 +172,7 @@ def sweep_sampler(
             "method": method,
             "steps": steps,
             "guidance": guidance,
-            "velocity_calls": steps * {"euler": 1, "heun": 2, "rk4": 4}[method],
+            "velocity_calls": velocity_calls(method, steps) * (1 if guidance == 1.0 else 2),
         }
         row.update({name: float(values.mean()) for name, values in scores.items()})
         rows.append(row)
@@ -177,13 +180,18 @@ def sweep_sampler(
     return rows
 
 
-def baseline_outputs(
-    store: GlyphStore, split: Split, train_ids: np.ndarray
-) -> tuple[torch.Tensor, np.ndarray]:
-    """Return per-character distances to the training fonts, and those fonts' target glyphs."""
-    corpus = store.glyphs[np.sort(train_ids)]
-    queries = store.glyphs[split.ids]
-    return glyph_distances(corpus, queries), np.asarray(corpus[:, split.target_chars])
+def load_distances(
+    store: GlyphStore, split: Split, train_ids: np.ndarray, cache: Path
+) -> torch.Tensor:
+    """Distances from the split's fonts to training fonts, kept because they take minutes."""
+    expected = (store.glyphs.shape[1], len(split.ids), len(train_ids))
+    if cache.exists():
+        saved = torch.from_numpy(np.load(cache))
+        if tuple(saved.shape) == expected:
+            return saved
+    distances = glyph_distances(store.glyphs, train_ids, split.ids)
+    np.save(cache, distances.numpy())
+    return distances
 
 
 def evaluate_test(
@@ -202,7 +210,13 @@ def evaluate_test(
     targets = TARGET_CHARS[::every_nth_char]
     split = make_split(store, ids, targets)
     train_ids = np.sort(store.split_indices("train"))
-    distances, corpus_targets = baseline_outputs(store, split, train_ids)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    distances = load_distances(store, split, train_ids, out_dir / "distances.npy")
+    target_index = np.array(targets)
+
+    def copied(nearest: np.ndarray) -> np.ndarray:
+        return np.asarray(store.glyphs[train_ids[nearest][:, None], target_index])
+
     clusters = [store.rows[i].cluster for i in ids]
     categories = [store.rows[i].category for i in ids]
     flat_truth = split.flatten(split.truth)
@@ -216,16 +230,21 @@ def evaluate_test(
 
     rows: dict[str, dict[str, object]] = {}
     per_font_scores: dict[str, dict[str, list[float]]] = {}
-    out_dir.mkdir(parents=True, exist_ok=True)
+
+    mean_glyphs = np.stack(
+        [np.asarray(store.glyphs[train_ids, c], dtype=np.float32).mean(axis=0) for c in targets]
+    )
+    mean_output = np.broadcast_to(mean_glyphs.round().astype(np.uint8), split.truth.shape)
+    rows["mean_glyph"] = summarize(score(mean_output), clusters)
 
     target_positions = torch.tensor(targets)
     oracle = distances[target_positions].sum(dim=0).argmin(dim=1)
-    oracle_scores = score(corpus_targets[oracle.numpy()])
+    oracle_scores = score(copied(oracle.numpy()))
     rows["oracle_font"] = summarize(oracle_scores, clusters)
 
     for k in counts:
         nearest = nearest_fonts(distances, reference_chars(k)).numpy()
-        nn_output = corpus_targets[nearest]
+        nn_output = copied(nearest)
         nn_scores = score(nn_output)
         rows[f"nearest_k{k}"] = summarize(nn_scores, clusters)
         output = run_model(model, store, split, k, sampler, seed)

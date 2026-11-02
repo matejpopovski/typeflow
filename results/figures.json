@@ -1,0 +1,20 @@
+{
+  "specimen": [
+    "Spectral SC Italic",
+    "Madhuban Light",
+    "MuseoModerno Italic"
+  ],
+  "gallery": [
+    "best: Carlito Regular",
+    "25th percentile: Fauna One Regular",
+    "median: Macondo Regular",
+    "75th percentile: Spectral Bold",
+    "95th percentile: Genos Italic",
+    "worst: Porter Sans Block Block"
+  ],
+  "morph": [
+    "Spectral SC Italic to MuseoModerno Italic",
+    "Madhuban Light to Spectral SC Italic",
+    "Nothing You Could Do Regular to Madhuban Light"
+  ]
+}

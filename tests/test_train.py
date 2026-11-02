@@ -9,7 +9,14 @@ from conftest import synthetic_store
 from typeflow.data import sample_batch, to_unit
 from typeflow.generate import export_weights, load_model
 from typeflow.model import ModelConfig, TypeFlow, tiny_config
-from typeflow.train import TrainConfig, flow_loss, learning_rate, train
+from typeflow.train import (
+    TrainConfig,
+    ema_decay,
+    flow_loss,
+    learning_rate,
+    seed_character_maps,
+    train,
+)
 
 CPU = torch.device("cpu")
 GLYPHS = synthetic_store(fonts=8)
@@ -71,11 +78,44 @@ def test_a_slow_run_still_finishes_decayed() -> None:
     assert learning_rate(cfg, 50, 100.0) == pytest.approx(0)
 
 
+def test_character_maps_start_from_each_letters_mean_shape() -> None:
+    glyphs = np.zeros((4, 65, 32, 32), dtype=np.uint8)
+    glyphs[:, 0, :8, :] = 255
+    glyphs[:, 1, -8:, :] = 255
+    model = TypeFlow(tiny_config())
+    before = model.content[:, 1:].clone()
+    seed_character_maps(model, glyphs, np.arange(4))
+    first, second = model.content[0, 0], model.content[1, 0]
+    assert first[:2].mean() > first[-2:].mean()
+    assert second[:2].mean() < second[-2:].mean()
+    assert torch.equal(model.content[:, 1:], before)
+
+
+def test_ema_decay_starts_at_zero_influence_of_the_past_and_ramps_to_target() -> None:
+    assert ema_decay(0.999, 0) == pytest.approx(0.1)
+    assert ema_decay(0.999, 100) < ema_decay(0.999, 1000)
+    assert ema_decay(0.999, 1_000_000) == 0.999
+
+
+@pytest.mark.slow
+def test_ema_tracks_training_early_on(tmp_path: Path) -> None:
+    """A fixed high decay scored ten times worse than the live weights after 3000 steps."""
+    cfg = config(max_steps=40, ema=0.9995)
+    ema = train(GLYPHS, IDS, tiny_config(), cfg, tmp_path, CPU)
+    live = torch.load(tmp_path / "latest.pt", map_location="cpu", weights_only=False)["model"]
+    untrained = TypeFlow(tiny_config()).state_dict()
+    near, far = 0.0, 0.0
+    for name, value in ema.state_dict().items():
+        near += (value - live[name]).norm().item()
+        far += (untrained[name] - live[name]).norm().item()
+    assert near < 0.5 * far
+
+
 def test_style_dropout_of_one_ignores_the_references() -> None:
     torch.manual_seed(0)
     model = TypeFlow(tiny_config())
     with torch.no_grad():
-        model.unet.head.weight.normal_(std=0.1)
+        model.unet.refine_out.weight.normal_(std=0.1)
     batch = sample_batch(GLYPHS, IDS, 2, 2, (2, 2), np.random.default_rng(0))
     other = sample_batch(GLYPHS, IDS, 2, 2, (2, 2), np.random.default_rng(0))
     other.refs = torch.randn_like(other.refs)

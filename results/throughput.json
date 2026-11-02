@@ -1,0 +1,14 @@
+{
+  "64x64 grid": {
+    "parameters": 9843541,
+    "milliseconds_per_step": 548.5,
+    "glyphs_per_second": 58.3
+  },
+  "32x32 grid": {
+    "parameters": 9718745,
+    "milliseconds_per_step": 293.7,
+    "glyphs_per_second": 108.9
+  },
+  "device": "mps",
+  "glyph_share_of_paper": 0.9390035832874395
+}

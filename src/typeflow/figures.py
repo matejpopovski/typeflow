@@ -29,7 +29,7 @@ from .specimen import (
 from .store import GlyphStore
 
 HEADLINE_K = 4
-HERO_CHARS = "ABGKMQRbdefhkpqtuy38&?"[:26]
+HERO_CHARS = "AGKQRbdefkpy&"
 GALLERY_CHARS = "ABGQRbdefhpy3&"
 
 
@@ -186,5 +186,5 @@ def sampler_steps(
                 extend_font(model, glyphs, reference_chars(HEADLINE_K), indices, cfg),
             )
         )
-    subtitle = "One Euler step gives the blurred average of every glyph the model finds plausible."
+    subtitle = "One step is a blurred average. More steps commit to a glyph."
     steps_sheet(columns, chars, "Sampler Steps", subtitle, faces).save(path)

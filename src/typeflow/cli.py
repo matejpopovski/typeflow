@@ -9,6 +9,8 @@ from pathlib import Path
 
 import numpy as np
 
+from .generate import SamplerConfig
+
 DEFAULT_WEIGHTS = Path("weights/typeflow.pt")
 PERCEPTUAL = Path("weights/perceptual.pt")
 
@@ -18,23 +20,22 @@ def _train_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--size", type=int, default=128)
     parser.add_argument("--minutes", type=float, default=70.0)
     parser.add_argument("--steps", type=int, default=100_000)
-    parser.add_argument("--fonts", type=int, default=8)
-    parser.add_argument("--per-font", type=int, default=6)
+    parser.add_argument("--fonts", type=int, default=16)
+    parser.add_argument("--per-font", type=int, default=2)
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--device", default="auto")
+    parser.add_argument("--checkpoint-seconds", type=float, default=300.0)
 
 
 def _sampler_arguments(parser: argparse.ArgumentParser) -> None:
-    parser.add_argument("--steps", type=int, default=16)
-    parser.add_argument("--method", default="heun")
-    parser.add_argument("--guidance", type=float, default=1.0)
+    parser.add_argument("--steps", type=int, default=SamplerConfig.steps)
+    parser.add_argument("--method", default=SamplerConfig.method)
+    parser.add_argument("--guidance", type=float, default=SamplerConfig.guidance)
     parser.add_argument("--device", default="auto")
     parser.add_argument("--seed", type=int, default=0)
 
 
-def _sampler(args: argparse.Namespace):
-    from .generate import SamplerConfig
-
+def _sampler(args: argparse.Namespace) -> SamplerConfig:
     return SamplerConfig(steps=args.steps, method=args.method, guidance=args.guidance)
 
 
@@ -50,6 +51,7 @@ def _train(args: argparse.Namespace) -> None:
         max_steps=args.steps,
         budget_seconds=args.minutes * 60,
         seed=args.seed,
+        checkpoint_seconds=args.checkpoint_seconds,
     )
     model = ModelConfig(image_size=args.size)
     train(
@@ -72,9 +74,10 @@ def _supervise(args: argparse.Namespace) -> int:
             "--per-font", str(args.per_font),
             "--seed", str(args.seed),
             "--device", args.device,
+            "--checkpoint-seconds", str(args.checkpoint_seconds),
         ]
     )  # fmt: skip
-    result = supervise(command, args.run, log=args.run / "trainer.log")
+    result = supervise(command, args.run, args.stall_seconds, log=args.run / "trainer.log")
     print(json.dumps(asdict(result)))
     return result.code
 
@@ -113,7 +116,8 @@ def _extend(args: argparse.Namespace) -> None:
     advance, per_row = int(size * 0.72), 13
     lines = [glyphs[i : i + per_row] for i in range(0, len(glyphs), per_row)]
     height = int(size * 0.95)
-    sheet = Sheet(advance * per_row + 112, 300 + height * len(lines), default_typefaces(args.data))
+    sheet_height = 220 + height * (len(lines) + 1)
+    sheet = Sheet(advance * per_row + 112, sheet_height, default_typefaces(args.data))
     y = sheet.header("Extension", f"Drawn from {' '.join(letters)}.")
     colors = [(168, 40, 32)] * len(refs)
     sheet.row(56, y, trim(refs, 0, height), advance, colors)
@@ -164,7 +168,7 @@ def _experiment(args: argparse.Namespace) -> None:
     if args.command == "perceptual":
         store = load_store(args.data, args.size)
         train_ids = np.sort(store.split_indices("train"))
-        report = train_perceptual(store.glyphs, train_ids, device, PERCEPTUAL)
+        report = train_perceptual(store.glyphs, train_ids, device, PERCEPTUAL, args.steps)
         write_report(report, Path("results/perceptual.json"))
         print(json.dumps(report, indent=2))
         return
@@ -180,10 +184,10 @@ def _experiment(args: argparse.Namespace) -> None:
         ev.write_results(Path("results/sampler_val.json"), rows)
     elif args.command == "evaluate":
         report = ev.evaluate_test(
-            model, net, store, _sampler(args), device, args.data / "outputs", args.seed,
-            every_nth_char=args.every_nth_char,
+            model, net, store, _sampler(args), device, args.outputs, args.seed,
+            tuple(args.reference_counts), args.every_nth_char,
         )  # fmt: skip
-        ev.write_results(Path("results/test.json"), report)
+        ev.write_results(args.results, report)
         print(json.dumps(report["summary"], indent=2))
     elif args.command == "interpolate":
         report = ev.interpolation_study(model, net, store, _sampler(args), device)
@@ -194,7 +198,7 @@ def _experiment(args: argparse.Namespace) -> None:
         from .specimen import default_typefaces
 
         faces = default_typefaces(args.data)
-        scores = figures.Scores.load(store, Path("results/test.json"), args.data / "outputs")
+        scores = figures.Scores.load(store, args.results, args.outputs)
         sampler = _sampler(args)
         shown = {
             "specimen": figures.hero(
@@ -218,10 +222,13 @@ def main(argv: list[str] | None = None) -> int:
     render.add_argument("--size", type=int, default=128)
 
     _train_arguments(commands.add_parser("train", help="train in this process"))
-    _train_arguments(commands.add_parser("supervise", help="train under the stall watchdog"))
+    watched = commands.add_parser("supervise", help="train under the stall watchdog")
+    _train_arguments(watched)
+    watched.add_argument("--stall-seconds", type=float, default=180.0)
 
     perceptual = commands.add_parser("perceptual", help="train the metric network")
     perceptual.add_argument("--size", type=int, default=128)
+    perceptual.add_argument("--steps", type=int, default=12_000)
     perceptual.add_argument("--device", default="auto")
 
     export = commands.add_parser("export", help="write half-precision EMA weights")
@@ -238,6 +245,9 @@ def main(argv: list[str] | None = None) -> int:
         command.add_argument("--weights", type=Path, default=DEFAULT_WEIGHTS)
         command.add_argument("--size", type=int, default=128)
         command.add_argument("--every-nth-char", type=int, default=1)
+        command.add_argument("--reference-counts", type=int, nargs="+", default=[1, 2, 4, 8])
+        command.add_argument("--results", type=Path, default=Path("results/test.json"))
+        command.add_argument("--outputs", type=Path, default=Path("data/outputs"))
         _sampler_arguments(command)
 
     extend = commands.add_parser("extend", help="draw a whole character set from a few letters")

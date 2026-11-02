@@ -1,9 +1,11 @@
+from argparse import Namespace
 from pathlib import Path
 
 import numpy as np
 from conftest import build_font
+from PIL import Image
 
-from typeflow.cli import main
+from typeflow.cli import _reference_glyphs, main
 from typeflow.generate import export_weights
 from typeflow.model import tiny_config
 from typeflow.specimen import (
@@ -69,7 +71,7 @@ def test_each_sheet_builds_without_overflowing_its_canvas() -> None:
 def tiny_weights(tmp_path: Path) -> Path:
     from conftest import synthetic_store
 
-    store = synthetic_store(fonts=4)
+    store = synthetic_store(fonts=4, size=128)
     cfg = TrainConfig(fonts=2, per_font=1, max_steps=1, warmup_steps=1)
     train(store, np.arange(4), tiny_config(128), cfg, tmp_path / "run", _cpu())
     out = tmp_path / "tiny.pt"
@@ -81,6 +83,17 @@ def _cpu():
     import torch
 
     return torch.device("cpu")
+
+
+def test_references_can_be_drawn_images(tmp_path: Path) -> None:
+    glyph = np.full((128, 128), 255, dtype=np.uint8)
+    glyph[40:90, 50:70] = 0
+    for letter in "nH":
+        Image.fromarray(glyph).save(tmp_path / f"{letter}.png")
+    args = Namespace(font=None, glyphs=tmp_path, letters="nH")
+    references, letters = _reference_glyphs(args)
+    assert letters == "nH" and references.shape == (2, 128, 128)
+    assert references[0, 50, 60] == 255 and references[0, 0, 0] == 0
 
 
 def test_extend_and_morph_commands_write_sheets(tmp_path: Path) -> None:
